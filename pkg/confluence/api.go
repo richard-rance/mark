@@ -22,7 +22,7 @@ type User struct {
 type API struct {
 	rest *gopencils.Resource
 
-	// it's deprecated accordingly to Atlassian documentation,
+	// it's deprecated according to Atlassian documentation,
 	// but it's only way to set permissions
 	json *gopencils.Resource
 }
@@ -386,11 +386,11 @@ func (api *API) CreatePage(
 			},
 		},
 		"metadata": map[string]interface{}{
-		  "properties": map[string]interface{}{
-		    "editor": map[string]interface{}{
-		       "value": "v2",
-		    },
-		  },
+			"properties": map[string]interface{}{
+				"editor": map[string]interface{}{
+					"value": "v2",
+				},
+			},
 		},
 	}
 

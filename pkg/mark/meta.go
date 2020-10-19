@@ -30,9 +30,10 @@ type Meta struct {
 }
 
 var (
-	reHeaderPatternV1 = regexp.MustCompile(`\[\]:\s*#\s*\(([^:]+):\s*(.*)\)`)
-	reHeaderPatternV2 = regexp.MustCompile(`<!--\s*([^:]+):\s*(.*)\s*-->`)
-	titlePattern      = regexp.MustCompile(`^#\s(.*)$`)
+	reHeaderPatternV1     = regexp.MustCompile(`\[\]:\s*#\s*\(([^:]+):\s*(.*)\)`)
+	reHeaderPatternV2     = regexp.MustCompile(`<!--\s*([^:]+):\s*(.*)\s*-->`)
+	titlePattern          = regexp.MustCompile(`^#\s(.*)$`)
+	fileAttachmentPattern = regexp.MustCompile(`!\[([^\[\]]+)\]\(([^\s\)]+)(\s+\"[^\"]+\")?\)`)
 )
 
 func NewMeta(filePath string) *Meta {
@@ -143,6 +144,24 @@ func (m *Meta) UpdateTitleFromBody(data []byte, limit int) error {
 		lineIndex++
 		if lineIndex > limit {
 			return nil
+		}
+	}
+
+	return nil
+}
+
+func (m *Meta) UpdateAttachmentsFromBody(data []byte) error {
+	scanner := bufio.NewScanner(bytes.NewBuffer(data))
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		if err := scanner.Err(); err != nil {
+			return err
+		}
+
+		matches := fileAttachmentPattern.FindStringSubmatch(line)
+		if matches != nil && len(matches) > 2 {
+			m.Attachments[matches[2]] = matches[2]
 		}
 	}
 

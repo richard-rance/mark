@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/docopt/docopt-go"
@@ -181,6 +182,15 @@ func main() {
 			if err != nil {
 				log.Fatal(err)
 			}
+		}
+
+		if meta.Title == "" {
+			meta.Title = strings.TrimSuffix(filepath.Base(meta.FilePath), filepath.Ext(meta.FilePath))
+		}
+
+		err = meta.UpdateAttachmentsFromBody(markdown)
+		if err != nil {
+			log.Fatal(err)
 		}
 
 		err = meta.Validate()
