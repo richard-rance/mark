@@ -3,9 +3,15 @@ package main
 import (
 	"errors"
 	"net/url"
+	"regexp"
 	"strings"
 
 	"github.com/reconquest/karma-go"
+)
+
+var (
+	pageIDPathMatch1 = regexp.MustCompile(`/pages/(\d+)/`)
+	pageIDPathMatch2 = regexp.MustCompile(`/pages/edit[^/]*/(\d+)$`)
 )
 
 type Credentials struct {
@@ -72,8 +78,7 @@ func GetCredentials(
 	}
 
 	baseURL = strings.TrimRight(baseURL, `/`)
-
-	pageID := url.Query().Get("pageId")
+	pageID := getPageIdFromUrl(url)
 
 	creds := &Credentials{
 		Username: username,
@@ -83,4 +88,22 @@ func GetCredentials(
 	}
 
 	return creds, nil
+}
+
+func getPageIdFromUrl(url *url.URL) string {
+	pageID := url.Query().Get("pageId")
+	if pageID != "" {
+		return pageID
+	}
+	path := url.Path
+	matches := pageIDPathMatch1.FindStringSubmatch(path)
+	if matches != nil && len(matches) > 1 {
+		return matches[1]
+	}
+	matches = pageIDPathMatch2.FindStringSubmatch(path)
+	if matches != nil && len(matches) > 1 {
+		return matches[1]
+	}
+
+	return ""
 }

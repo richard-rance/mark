@@ -32,7 +32,7 @@ type Meta struct {
 var (
 	reHeaderPatternV1 = regexp.MustCompile(`\[\]:\s*#\s*\(([^:]+):\s*(.*)\)`)
 	reHeaderPatternV2 = regexp.MustCompile(`<!--\s*([^:]+):\s*(.*)\s*-->`)
-	//titlePattern      = regexp.MustCompile(`^#\s.*$`)
+	titlePattern      = regexp.MustCompile(`^#\s(.*)$`)
 )
 
 func NewMeta(filePath string) *Meta {
@@ -112,20 +112,6 @@ func (m *Meta) UpdateFromHeader(data []byte) ([]byte, error) {
 		}
 	}
 
-	if m.Space == "" {
-		return nil, fmt.Errorf(
-			"space key is not set (%s header is not set)",
-			HeaderSpace,
-		)
-	}
-
-	if m.Title == "" {
-		return nil, fmt.Errorf(
-			"page title is not set (%s header is not set)",
-			HeaderTitle,
-		)
-	}
-
 	return data[offset:], nil
 }
 
@@ -136,4 +122,50 @@ func (m *Meta) UpdateParentsFromPath() {
 		parents = append(parents, strings.Trim(dir, string(os.PathSeparator)))
 	}
 	m.Parents = parents
+}
+
+func (m *Meta) UpdateTitleFromBody(data []byte, limit int) error {
+	lineIndex := 0
+	scanner := bufio.NewScanner(bytes.NewBuffer(data))
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		if err := scanner.Err(); err != nil {
+			return err
+		}
+
+		matches := titlePattern.FindStringSubmatch(line)
+		if matches != nil && len(matches) > 1 {
+			m.Title = matches[1]
+			return nil
+		}
+
+		lineIndex++
+		if lineIndex > limit {
+			return nil
+		}
+	}
+
+	return nil
+}
+
+func (m *Meta) Validate() error {
+	if m.FilePath == "" {
+		return fmt.Errorf("file path is not set")
+	}
+
+	if m.Space == "" {
+		return fmt.Errorf("target space is not set (%s header or option is not set)",
+			HeaderSpace,
+		)
+	}
+
+	if m.Title == "" {
+		return fmt.Errorf(
+			"page title is not set (%s header is not set or could not be inferred)",
+			HeaderTitle,
+		)
+	}
+
+	return nil
 }

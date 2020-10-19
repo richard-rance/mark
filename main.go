@@ -176,6 +176,18 @@ func main() {
 			log.Fatal(err)
 		}
 
+		if meta.Title == "" {
+			err = meta.UpdateTitleFromBody(markdown, 10)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+
+		err = meta.Validate()
+		if err != nil {
+			log.Fatal(err)
+		}
+
 		stdlib, err := stdlib.New(api)
 		if err != nil {
 			log.Fatal(err)
