@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/docopt/docopt-go"
 	"github.com/kovetskiy/mark/pkg/confluence"
@@ -158,179 +159,189 @@ func main() {
 
 	api := confluence.NewAPI(creds.BaseURL, creds.Username, creds.Password)
 
-	markdown, err := ioutil.ReadFile(targetFile)
+	files, err := mark.ListFiles(targetFile, 5*time.Hour)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	meta, markdown, err := mark.ExtractMeta(markdown)
-	if err != nil {
-		log.Fatal(err)
-	}
+	for _, f := range files {
 
-	stdlib, err := stdlib.New(api)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	templates := stdlib.Templates
-
-	var recurse bool
-
-	for {
-		templates, markdown, recurse, err = includes.ProcessIncludes(
-			markdown,
-			templates,
-		)
+		markdown, err := ioutil.ReadFile(f.FilePath)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		if !recurse {
-			break
-		}
-	}
-
-	macros, markdown, err := macro.ExtractMacros(markdown, templates)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	macros = append(macros, stdlib.Macros...)
-
-	for _, macro := range macros {
-		markdown, err = macro.Apply(markdown)
+		markdown, err := meta.ExtractMeta(markdown)
 		if err != nil {
 			log.Fatal(err)
 		}
-	}
 
-	if dryRun {
-		compileOnly = true
-
-		_, _, err := mark.ResolvePage(dryRun, api, meta)
+		stdlib, err := stdlib.New(api)
 		if err != nil {
-			log.Fatalf(err, "unable to resolve page location")
+			log.Fatal(err)
 		}
-	}
 
-	if compileOnly {
-		fmt.Println(mark.CompileMarkdown(markdown, stdlib))
-		os.Exit(0)
-	}
+		templates := stdlib.Templates
 
-	if creds.PageID != "" && meta != nil {
-		log.Warning(
-			`specified file contains metadata, ` +
-				`but it will be ignored due specified command line URL`,
-		)
+		var recurse bool
 
-		meta = nil
-	}
-
-	if creds.PageID == "" && meta == nil {
-		log.Fatal(
-			`specified file doesn't contain metadata ` +
-				`and URL is not specified via command line ` +
-				`or doesn't contain pageId GET-parameter`,
-		)
-	}
-
-	var target *confluence.PageInfo
-
-	if meta != nil {
-		parent, page, err := mark.ResolvePage(dryRun, api, meta)
-		if err != nil {
-			log.Fatalf(
-				karma.Describe("title", meta.Title).Reason(err),
-				"unable to resolve page",
+		for {
+			templates, markdown, recurse, err = includes.ProcessIncludes(
+				markdown,
+				templates,
 			)
-		}
-
-		if page == nil {
-			page, err = api.CreatePage(meta.Space, parent, meta.Title, ``)
 			if err != nil {
-				log.Fatalf(
-					err,
-					"can't create page %q",
-					meta.Title,
-				)
+				log.Fatal(err)
+			}
+
+			if !recurse {
+				break
 			}
 		}
 
-		target = page
-	} else {
-		if creds.PageID == "" {
-			log.Fatalf(nil, "URL should provide 'pageId' GET-parameter")
-		}
-
-		page, err := api.GetPageByID(creds.PageID)
-		if err != nil {
-			log.Fatalf(err, "unable to retrieve page by id")
-		}
-
-		target = page
-	}
-
-	attaches, err := mark.ResolveAttachments(api, target, ".", meta.Attachments)
-	if err != nil {
-		log.Fatalf(err, "unable to create/update attachments")
-	}
-
-	markdown = mark.CompileAttachmentLinks(markdown, attaches)
-
-	html := mark.CompileMarkdown(markdown, stdlib)
-
-	{
-		var buffer bytes.Buffer
-
-		err := stdlib.Templates.ExecuteTemplate(
-			&buffer,
-			"ac:layout",
-			struct {
-				Layout string
-				Body   string
-			}{
-				Layout: meta.Layout,
-				Body:   html,
-			},
-		)
+		macros, markdown, err := macro.ExtractMacros(markdown, templates)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		html = buffer.String()
-	}
+		macros = append(macros, stdlib.Macros...)
 
-	err = api.UpdatePage(target, html)
-	if err != nil {
-		log.Fatal(err)
-	}
+		for _, macro := range macros {
+			markdown, err = macro.Apply(markdown)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
 
-	if editLock {
+		if dryRun {
+			compileOnly = true
+
+			_, _, err := mark.ResolvePage(dryRun, api, meta)
+			if err != nil {
+				log.Fatalf(err, "unable to resolve page location")
+			}
+		}
+
+		if compileOnly {
+			fmt.Println(mark.CompileMarkdown(markdown, stdlib))
+			os.Exit(0)
+		}
+
+		if creds.PageID != "" && meta != nil {
+			log.Warning(
+				`specified file contains metadata, ` +
+					`but it will be ignored due specified command line URL`,
+			)
+
+			meta = nil
+		}
+
+		if creds.PageID == "" && meta == nil {
+			log.Fatal(
+				`specified file doesn't contain metadata ` +
+					`and URL is not specified via command line ` +
+					`or doesn't contain pageId GET-parameter`,
+			)
+		}
+
+		var target *confluence.PageInfo
+
+		if meta != nil {
+			parent, page, err := mark.ResolvePage(dryRun, api, meta)
+			if err != nil {
+				log.Fatalf(
+					karma.Describe("title", meta.Title).Reason(err),
+					"unable to resolve page",
+				)
+			}
+
+			if page == nil {
+				page, err = api.CreatePage(meta.Space, parent, meta.Title, ``)
+				if err != nil {
+					log.Fatalf(
+						err,
+						"can't create page %q",
+						meta.Title,
+					)
+				}
+			}
+
+			target = page
+		} else {
+			if creds.PageID == "" {
+				log.Fatalf(nil, "URL should provide 'pageId' GET-parameter")
+			}
+
+			page, err := api.GetPageByID(creds.PageID)
+			if err != nil {
+				log.Fatalf(err, "unable to retrieve page by id")
+			}
+
+			target = page
+		}
+
+		fileDir := filepath.Dir(targetFile)
+
+		attaches, err := mark.ResolveAttachments(api, target, fileDir, meta.Attachments)
+		if err != nil {
+			log.Fatalf(err, "unable to create/update attachments")
+		}
+
+		markdown = mark.CompileAttachmentLinks(markdown, attaches)
+
+		html := mark.CompileMarkdown(markdown, stdlib)
+
+		{
+			var buffer bytes.Buffer
+
+			err := stdlib.Templates.ExecuteTemplate(
+				&buffer,
+				"ac:layout",
+				struct {
+					Layout string
+					Body   string
+				}{
+					Layout: meta.Layout,
+					Body:   html,
+				},
+			)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			html = buffer.String()
+		}
+
+		err = api.UpdatePage(target, html)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		if editLock {
+			log.Infof(
+				nil,
+				`edit locked on page %q by user %q to prevent manual edits`,
+				target.Title,
+				creds.Username,
+			)
+
+			err := api.RestrictPageUpdates(
+				target,
+				creds.Username,
+			)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+
 		log.Infof(
 			nil,
-			`edit locked on page %q by user %q to prevent manual edits`,
-			target.Title,
-			creds.Username,
+			"page successfully updated: %s",
+			creds.BaseURL+target.Links.Full,
 		)
 
-		err := api.RestrictPageUpdates(
-			target,
-			creds.Username,
+		fmt.Println(
+			creds.BaseURL + target.Links.Full,
 		)
-		if err != nil {
-			log.Fatal(err)
-		}
 	}
-
-	log.Infof(
-		nil,
-		"page successfully updated: %s",
-		creds.BaseURL+target.Links.Full,
-	)
-
-	fmt.Println(
-		creds.BaseURL + target.Links.Full,
-	)
 }
