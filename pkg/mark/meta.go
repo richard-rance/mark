@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -19,6 +21,7 @@ const (
 )
 
 type Meta struct {
+	FilePath    string
 	Parents     []string
 	Space       string
 	Title       string
@@ -29,20 +32,30 @@ type Meta struct {
 var (
 	reHeaderPatternV1 = regexp.MustCompile(`\[\]:\s*#\s*\(([^:]+):\s*(.*)\)`)
 	reHeaderPatternV2 = regexp.MustCompile(`<!--\s*([^:]+):\s*(.*)\s*-->`)
+	//titlePattern      = regexp.MustCompile(`^#\s.*$`)
 )
 
-func ExtractMeta(data []byte) (*Meta, []byte, error) {
-	var (
-		meta   *Meta
-		offset int
-	)
+func NewMeta(filePath string) *Meta {
+	meta := &Meta{
+		FilePath: filePath,
+	}
+	meta.UpdateParentsFromPath()
+
+	return meta
+}
+
+func (m *Meta) UpdateFromHeader(data []byte) ([]byte, error) {
+	if m == nil {
+		return nil, fmt.Errorf("No metadata object provided.")
+	}
+	var offset int
 
 	scanner := bufio.NewScanner(bytes.NewBuffer(data))
 	for scanner.Scan() {
 		line := scanner.Text()
 
 		if err := scanner.Err(); err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 
 		offset += len(line) + 1
@@ -62,10 +75,7 @@ func ExtractMeta(data []byte) (*Meta, []byte, error) {
 			)
 		}
 
-		if meta == nil {
-			meta = &Meta{}
-			meta.Attachments = make(map[string]string)
-		}
+		m.Attachments = make(map[string]string)
 
 		header := strings.Title(matches[1])
 
@@ -76,19 +86,19 @@ func ExtractMeta(data []byte) (*Meta, []byte, error) {
 
 		switch header {
 		case HeaderParent:
-			meta.Parents = append(meta.Parents, value)
+			m.Parents = append(m.Parents, value)
 
 		case HeaderSpace:
-			meta.Space = strings.TrimSpace(value)
+			m.Space = strings.TrimSpace(value)
 
 		case HeaderTitle:
-			meta.Title = strings.TrimSpace(value)
+			m.Title = strings.TrimSpace(value)
 
 		case HeaderLayout:
-			meta.Layout = strings.TrimSpace(value)
+			m.Layout = strings.TrimSpace(value)
 
 		case HeaderAttachment:
-			meta.Attachments[value] = value
+			m.Attachments[value] = value
 
 		default:
 			log.Errorf(
@@ -102,23 +112,28 @@ func ExtractMeta(data []byte) (*Meta, []byte, error) {
 		}
 	}
 
-	if meta == nil {
-		return nil, data, nil
-	}
-
-	if meta.Space == "" {
-		return nil, nil, fmt.Errorf(
+	if m.Space == "" {
+		return nil, fmt.Errorf(
 			"space key is not set (%s header is not set)",
 			HeaderSpace,
 		)
 	}
 
-	if meta.Title == "" {
-		return nil, nil, fmt.Errorf(
+	if m.Title == "" {
+		return nil, fmt.Errorf(
 			"page title is not set (%s header is not set)",
 			HeaderTitle,
 		)
 	}
 
-	return meta, data[offset:], nil
+	return data[offset:], nil
+}
+
+func (m *Meta) UpdateParentsFromPath() {
+	dirs := filepath.SplitList(m.FilePath)
+	parents := make([]string, 0)
+	for _, dir := range dirs {
+		parents = append(parents, strings.Trim(dir, string(os.PathSeparator)))
+	}
+	m.Parents = parents
 }

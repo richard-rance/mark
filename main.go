@@ -159,19 +159,19 @@ func main() {
 
 	api := confluence.NewAPI(creds.BaseURL, creds.Username, creds.Password)
 
-	files, err := mark.ListFiles(targetFile, 5*time.Hour)
+	fileMetadata, err := mark.ListFiles(targetFile, 5*time.Hour)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	for _, f := range files {
+	for _, meta := range fileMetadata {
 
-		markdown, err := ioutil.ReadFile(f.FilePath)
+		markdown, err := ioutil.ReadFile(meta.FilePath)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		markdown, err := meta.ExtractMeta(markdown)
+		markdown, err = meta.UpdateFromHeader(markdown)
 		if err != nil {
 			log.Fatal(err)
 		}

@@ -41,10 +41,7 @@ func ListFiles(path string, modifiedLast time.Duration) ([]*Meta, error) {
 						}
 					}
 
-					files = append(files, &Meta{
-						FilePath: path,
-					})
-
+					files = append(files, NewMeta(path))
 				}
 				return nil
 			})
@@ -52,9 +49,7 @@ func ListFiles(path string, modifiedLast time.Duration) ([]*Meta, error) {
 			return nil, fmt.Errorf("unable to walk path: %s", path)
 		}
 	} else {
-		files = append(files, &Meta{
-			FilePath: path,
-		})
+		files = append(files, NewMeta(path))
 	}
 
 	return files, nil
