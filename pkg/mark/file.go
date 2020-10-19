@@ -10,14 +10,14 @@ import (
 	"github.com/kovetskiy/mark/pkg/log"
 )
 
-func ListFiles(path string, modifiedLast time.Duration) ([]Meta, error) {
+func ListFiles(path string, modifiedLast time.Duration) ([]*Meta, error) {
 	file, err := os.Open(path)
 	defer file.Close()
 	if err != nil {
 		return nil, fmt.Errorf("error opening file %s", err)
 	}
 
-	files := make([]Meta, 0, 1)
+	files := make([]*Meta, 0, 1)
 
 	stat, err := file.Stat()
 	if err != nil {
@@ -41,7 +41,7 @@ func ListFiles(path string, modifiedLast time.Duration) ([]Meta, error) {
 						}
 					}
 
-					files = append(files, Meta{
+					files = append(files, &Meta{
 						FilePath: path,
 					})
 
@@ -52,7 +52,7 @@ func ListFiles(path string, modifiedLast time.Duration) ([]Meta, error) {
 			return nil, fmt.Errorf("unable to walk path: %s", path)
 		}
 	} else {
-		files = append(files, Meta{
+		files = append(files, &Meta{
 			FilePath: path,
 		})
 	}
