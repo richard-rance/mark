@@ -61,20 +61,18 @@ func GetCredentials(
 		)
 	}
 
-	baseURL := url.Scheme + "://" + url.Host
-
-	if url.Host == "" {
-		var ok bool
-		baseURL, ok = args["--base-url"].(string)
-		if !ok {
-			baseURL = config.BaseURL
-			if baseURL == "" {
-				return nil, errors.New(
-					"Confluence base URL should be specified using -l " +
-						"flag or be stored in configuration file",
-				)
-			}
-		}
+	baseURL, ok := args["--base-url"].(string)
+	if !ok {
+		baseURL = config.BaseURL
+	}
+	if baseURL == "" && url.Host != "" {
+		baseURL = url.Scheme + "://" + url.Host
+	}
+	if baseURL == "" {
+		return nil, errors.New(
+			"Confluence base URL should be specified using the -l " +
+				"flag or be stored in the configuration file",
+		)
 	}
 
 	baseURL = strings.TrimRight(baseURL, `/`)

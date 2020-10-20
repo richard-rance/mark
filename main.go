@@ -175,7 +175,6 @@ func main() {
 		log.Fatal(err)
 		os.Exit(1)
 	}
-	_ = rootFile
 
 	fileMetadata, err := mark.ListFiles(targetFile, modifiedSince)
 	if err != nil {
@@ -206,6 +205,10 @@ func main() {
 
 		if meta.Title == "" {
 			meta.Title = strings.TrimSuffix(filepath.Base(meta.FilePath), filepath.Ext(meta.FilePath))
+		}
+
+		if meta.Space == "" && rootFile != nil {
+			meta.Space = rootFile.Space.Key
 		}
 
 		err = meta.UpdateAttachmentsFromBody(markdown)
