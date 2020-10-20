@@ -31,8 +31,6 @@ func ListFiles(path string, modifiedLast time.Duration) ([]*Meta, error) {
 					return err
 				}
 
-				relativePath := strings.TrimPrefix(filePath, path)
-
 				if strings.HasSuffix(filePath, ".md") {
 
 					// Only include this file if it was modified m.Since minutes ago
@@ -43,7 +41,7 @@ func ListFiles(path string, modifiedLast time.Duration) ([]*Meta, error) {
 						}
 					}
 
-					files = append(files, NewMeta(relativePath))
+					files = append(files, NewMeta(path, filePath))
 				}
 				return nil
 			})
