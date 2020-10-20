@@ -117,10 +117,19 @@ func (m *Meta) UpdateFromHeader(data []byte) ([]byte, error) {
 }
 
 func (m *Meta) UpdateParentsFromPath() {
-	dirs := filepath.SplitList(m.FilePath)
+	var file string
+	path := filepath.Dir(m.FilePath)
 	parents := make([]string, 0)
-	for _, dir := range dirs {
-		parents = append(parents, strings.Trim(dir, string(os.PathSeparator)))
+	for path != "" {
+		path, file = filepath.Split(path)
+		path = strings.TrimRight(path, string(os.PathSeparator))
+		file = strings.ReplaceAll(file, ".", " ")
+		file = strings.ReplaceAll(file, "-", " ")
+		file = strings.ReplaceAll(file, "_", " ")
+		file = strings.Trim(file, " "+string(os.PathSeparator))
+		if file != "" {
+			parents = append([]string{strings.Title(file)}, parents...)
+		}
 	}
 	m.Parents = parents
 }
