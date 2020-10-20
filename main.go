@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -124,6 +125,7 @@ Options:
   -f <file>            Use specified markdown file for converting to html.
   -k                   Lock page editing to current user only to prevent accidental
                         manual edits over Confluence Web UI.
+  -s --since <minutes> When file is a directory only process files modified in the last x minutes
   --dry-run            Resolve page and ancestry, show resulting HTML and exit.
   --compile-only       Show resulting HTML and don't update Confluence page content.
   --debug              Enable debug logs.
@@ -145,6 +147,12 @@ func main() {
 		dryRun        = args["--dry-run"].(bool)
 		editLock      = args["-k"].(bool)
 	)
+	since, err := argInt(args, "--since")
+	if err != nil {
+		log.Fatal(err)
+		os.Exit(1)
+	}
+	modifiedSince := time.Duration(since) * time.Minute
 
 	log.Init(args["--debug"].(bool), args["--trace"].(bool))
 
@@ -162,7 +170,7 @@ func main() {
 
 	api := confluence.NewAPI(creds.BaseURL, creds.Username, creds.Password)
 
-	fileMetadata, err := mark.ListFiles(targetFile, 5*time.Hour)
+	fileMetadata, err := mark.ListFiles(targetFile, modifiedSince)
 	if err != nil {
 		log.Fatal(err)
 		os.Exit(1)
@@ -376,4 +384,16 @@ func main() {
 			creds.BaseURL + target.Links.Full,
 		)
 	}
+}
+
+func argInt(args map[string]interface{}, key string) (int, error) {
+	arg, ok := args[key].(string)
+	if !ok {
+		return 0, nil
+	}
+	v, err := strconv.Atoi(arg)
+	if err != nil {
+		return 0, fmt.Errorf("%v is not a valid int: %w", key, err)
+	}
+	return v, nil
 }
