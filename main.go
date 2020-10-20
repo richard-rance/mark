@@ -115,23 +115,23 @@ Usage:
   mark -h | --help
 
 Options:
-  -u <username>        Use specified username for updating Confluence page.
-  -p <token>           Use specified token for updating Confluence page.
-  -l <url>             Edit specified Confluence page.
-                        If -l is not specified, file should contain metadata (see
-                        above).
-  -b --base-url <url>  Base URL for Confluence.
-                        Alternative option for base_url config field.
-  -f <file>            Use specified markdown file for converting to html.
-  -k                   Lock page editing to current user only to prevent accidental
-                        manual edits over Confluence Web UI.
-  -s --since <minutes> When file is a directory only process files modified in the last x minutes
-  --dry-run            Resolve page and ancestry, show resulting HTML and exit.
-  --compile-only       Show resulting HTML and don't update Confluence page content.
-  --debug              Enable debug logs.
-  --trace              Enable trace logs.
-  -h --help            Show this screen and call 911.
-  -v --version         Show version.
+  -u <username>         Use specified username for updating Confluence page.
+  -p <token>            Use specified token for updating Confluence page.
+  -l <url>              Edit specified Confluence page.
+                         If -l is not specified, file should contain metadata (see
+                         above).
+  -b --base-url <url>   Base URL for Confluence.
+                         Alternative option for base_url config field.
+  -f <file>             Use specified markdown file for converting to html.
+  -k                    Lock page editing to current user only to prevent accidental
+                         manual edits over Confluence Web UI.
+  -s --since <minutes>  When file is a directory only process files modified in the last x minutes
+  --dry-run             Resolve page and ancestry, show resulting HTML and exit.
+  --compile-only        Show resulting HTML and don't update Confluence page content.
+  --debug               Enable debug logs.
+  --trace               Enable trace logs.
+  -h --help             Show this screen and call 911.
+  -v --version          Show version.
 `
 )
 
@@ -169,6 +169,13 @@ func main() {
 	}
 
 	api := confluence.NewAPI(creds.BaseURL, creds.Username, creds.Password)
+
+	rootFile, err := api.GetPageByID(creds.PageID)
+	if err != nil {
+		log.Fatal(err)
+		os.Exit(1)
+	}
+	_ = rootFile
 
 	fileMetadata, err := mark.ListFiles(targetFile, modifiedSince)
 	if err != nil {
@@ -320,7 +327,7 @@ func main() {
 			target = page
 		}
 
-		fileDir := filepath.Dir(targetFile)
+		fileDir := filepath.Dir(meta.FilePath)
 
 		attaches, err := mark.ResolveAttachments(api, target, fileDir, meta.Attachments)
 		if err != nil {
