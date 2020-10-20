@@ -117,6 +117,7 @@ Usage:
 Options:
   -u <username>         Use specified username for updating Confluence page.
   -p <token>            Use specified token for updating Confluence page.
+  -r <url>              Specify the base Confluence page to update.
   -l <url>              Edit specified Confluence page.
                          If -l is not specified, file should contain metadata (see
                          above).
@@ -170,7 +171,7 @@ func main() {
 
 	api := confluence.NewAPI(creds.BaseURL, creds.Username, creds.Password)
 
-	rootFile, err := api.GetPageByID(creds.PageID)
+	rootFile, err := api.GetPageByID(creds.RootPageID)
 	if err != nil {
 		log.Fatal(err)
 		os.Exit(1)

@@ -15,10 +15,11 @@ var (
 )
 
 type Credentials struct {
-	Username string
-	Password string
-	BaseURL  string
-	PageID   string
+	Username   string
+	Password   string
+	BaseURL    string
+	PageID     string
+	RootPageID string
 }
 
 func GetCredentials(
@@ -29,9 +30,17 @@ func GetCredentials(
 		username, _  = args["-u"].(string)
 		password, _  = args["-p"].(string)
 		targetURL, _ = args["-l"].(string)
+		rootPage, _  = args["-r"].(string)
 	)
 
 	var err error
+
+	if targetURL != "" && rootPage != "" {
+		return nil, errors.New(
+			"Confluence target URL should not be specified using -l " +
+				"at the same time as the root page with the -r option",
+		)
+	}
 
 	if username == "" {
 		username = config.Username
@@ -57,7 +66,7 @@ func GetCredentials(
 	if err != nil {
 		return nil, karma.Format(
 			err,
-			"unable to parse %q as url", targetURL,
+			"unable to parse %q as a url", targetURL,
 		)
 	}
 
@@ -76,13 +85,24 @@ func GetCredentials(
 	}
 
 	baseURL = strings.TrimRight(baseURL, `/`)
+
+	rootURL, err := url.Parse(rootPage)
+	if err != nil {
+		return nil, karma.Format(
+			err,
+			"unable to parse %q as a url", rootPage,
+		)
+	}
+
 	pageID := getPageIdFromUrl(url)
+	rootPageID := getPageIdFromUrl(rootURL)
 
 	creds := &Credentials{
-		Username: username,
-		Password: password,
-		BaseURL:  baseURL,
-		PageID:   pageID,
+		Username:   username,
+		Password:   password,
+		BaseURL:    baseURL,
+		PageID:     pageID,
+		RootPageID: rootPageID,
 	}
 
 	return creds, nil
