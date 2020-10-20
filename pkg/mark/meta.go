@@ -13,7 +13,6 @@ import (
 )
 
 const (
-	HeaderParent     = `Parent`
 	HeaderSpace      = `Space`
 	HeaderTitle      = `Title`
 	HeaderLayout     = `Layout`
@@ -21,13 +20,15 @@ const (
 )
 
 type Meta struct {
-	FilePath    string
-	Parents     []string
+	RelativePath   string
+	FileSystemPath string
 	Space       string
 	Title       string
 	Layout      string
 	Attachments map[string]string
 	PageID      string
+	Parent         *Meta
+	Children       []*Meta
 }
 
 var (
@@ -37,11 +38,13 @@ var (
 	fileAttachmentPattern = regexp.MustCompile(`!\[([^\[\]]+)\]\(([^\s\)]+)(\s+\"[^\"]+\")?\)`)
 )
 
-func NewMeta(filePath string) *Meta {
+func NewMeta(basePath, filePath string, parent *Meta) *Meta {
 	meta := &Meta{
-		FilePath: filePath,
+		RelativePath:   strings.TrimPrefix(filePath, basePath),
+		FileSystemPath: filePath,
+		Parent:         parent,
+		Children:       make([]*Meta, 0),
 	}
-	meta.UpdateParentsFromPath()
 
 	return meta
 }
@@ -87,9 +90,6 @@ func (m *Meta) UpdateFromHeader(data []byte) ([]byte, error) {
 		}
 
 		switch header {
-		case HeaderParent:
-			m.Parents = append(m.Parents, value)
-
 		case HeaderSpace:
 			m.Space = strings.TrimSpace(value)
 
@@ -117,13 +117,15 @@ func (m *Meta) UpdateFromHeader(data []byte) ([]byte, error) {
 	return data[offset:], nil
 }
 
-func (m *Meta) UpdateParentsFromPath() {
-	dirs := filepath.SplitList(m.FilePath)
-	parents := make([]string, 0)
-	for _, dir := range dirs {
-		parents = append(parents, strings.Trim(dir, string(os.PathSeparator)))
-	}
-	m.Parents = parents
+func (m *Meta) UpdateTitleFromPath() {
+	path, file := filepath.Split(m.RelativePath)
+	path = strings.TrimRight(path, string(os.PathSeparator))
+	file = strings.ReplaceAll(file, ".", " ")
+	file = strings.ReplaceAll(file, "-", " ")
+	file = strings.ReplaceAll(file, "_", " ")
+	file = strings.Trim(file, " "+string(os.PathSeparator))
+	ext := filepath.Ext(file)
+	m.Title = strings.TrimSuffix(file, ext)
 }
 
 func (m *Meta) UpdateTitleFromBody(data []byte, limit int) error {
@@ -170,7 +172,7 @@ func (m *Meta) UpdateAttachmentsFromBody(data []byte) error {
 }
 
 func (m *Meta) Validate() error {
-	if m.FilePath == "" {
+	if m.FileSystemPath == "" {
 		return fmt.Errorf("file path is not set")
 	}
 

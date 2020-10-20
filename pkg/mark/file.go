@@ -26,12 +26,12 @@ func ListFiles(path string, modifiedLast time.Duration) ([]*Meta, error) {
 	if stat.IsDir() {
 		var now = time.Now()
 		err := filepath.Walk(path,
-			func(path string, info os.FileInfo, err error) error {
+			func(filePath string, info os.FileInfo, err error) error {
 				if err != nil {
 					return err
 				}
 
-				if strings.HasSuffix(path, ".md") {
+				if strings.HasSuffix(filePath, ".md") {
 
 					// Only include this file if it was modified m.Since minutes ago
 					if modifiedLast != 0 {
@@ -41,7 +41,7 @@ func ListFiles(path string, modifiedLast time.Duration) ([]*Meta, error) {
 						}
 					}
 
-					files = append(files, NewMeta(path))
+					files = append(files, NewMeta(path, filePath))
 				}
 				return nil
 			})
