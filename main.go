@@ -151,11 +151,13 @@ func main() {
 	config, err := LoadConfig(filepath.Join(os.Getenv("HOME"), ".config/mark"))
 	if err != nil {
 		log.Fatal(err)
+		os.Exit(1)
 	}
 
 	creds, err := GetCredentials(args, config)
 	if err != nil {
 		log.Fatal(err)
+		os.Exit(1)
 	}
 
 	api := confluence.NewAPI(creds.BaseURL, creds.Username, creds.Password)
@@ -163,6 +165,7 @@ func main() {
 	fileMetadata, err := mark.ListFiles(targetFile, 5*time.Hour)
 	if err != nil {
 		log.Fatal(err)
+		os.Exit(1)
 	}
 
 	for _, meta := range fileMetadata {
@@ -170,11 +173,13 @@ func main() {
 		markdown, err := ioutil.ReadFile(meta.FilePath)
 		if err != nil {
 			log.Fatal(err)
+			os.Exit(1)
 		}
 
 		markdown, err = meta.UpdateFromHeader(markdown)
 		if err != nil {
 			log.Fatal(err)
+			os.Exit(1)
 		}
 
 		if meta.Title == "" {
@@ -201,6 +206,7 @@ func main() {
 		stdlib, err := stdlib.New(api)
 		if err != nil {
 			log.Fatal(err)
+			os.Exit(1)
 		}
 
 		templates := stdlib.Templates
@@ -214,6 +220,7 @@ func main() {
 			)
 			if err != nil {
 				log.Fatal(err)
+				os.Exit(1)
 			}
 
 			if !recurse {
@@ -224,6 +231,7 @@ func main() {
 		macros, markdown, err := macro.ExtractMacros(markdown, templates)
 		if err != nil {
 			log.Fatal(err)
+			os.Exit(1)
 		}
 
 		macros = append(macros, stdlib.Macros...)
@@ -232,6 +240,7 @@ func main() {
 			markdown, err = macro.Apply(markdown)
 			if err != nil {
 				log.Fatal(err)
+				os.Exit(1)
 			}
 		}
 
@@ -241,6 +250,7 @@ func main() {
 			_, _, err := mark.ResolvePage(dryRun, api, meta)
 			if err != nil {
 				log.Fatalf(err, "unable to resolve page location")
+				os.Exit(1)
 			}
 		}
 
