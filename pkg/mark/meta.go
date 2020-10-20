@@ -27,6 +27,7 @@ type Meta struct {
 	Title       string
 	Layout      string
 	Attachments map[string]string
+	PageID      string
 }
 
 var (

@@ -85,3 +85,17 @@ func ResolvePage(
 
 	return parent, page, nil
 }
+
+func PairPages(existingPages []*confluence.PageInfo, fileMetadata []*Meta) error {
+	for _, md := range fileMetadata {
+		for _, ep := range existingPages {
+			if ep.Metadata.Properties.MarkSource.Value == md.FilePath {
+				md.PageID = ep.ID
+			}
+		}
+	}
+
+	// TODO Track pages to be deleted
+
+	return nil
+}

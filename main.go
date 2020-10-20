@@ -171,16 +171,33 @@ func main() {
 
 	api := confluence.NewAPI(creds.BaseURL, creds.Username, creds.Password)
 
-	rootFile, err := api.GetPageByID(creds.RootPageID)
-	if err != nil {
-		log.Fatal(err)
-		os.Exit(1)
-	}
+	spaceKey := ""
+	var fileMetadata []*mark.Meta
+	if creds.RootPageID != "" {
+		// Importing a directory
+		rootFile, err := api.GetPageByID(creds.RootPageID)
+		if err != nil {
+			log.Fatal(err)
+			os.Exit(1)
+		}
+		spaceKey = rootFile.Space.Key
 
-	fileMetadata, err := mark.ListFiles(targetFile, modifiedSince)
-	if err != nil {
-		log.Fatal(err)
-		os.Exit(1)
+		existingPages, err := api.ListChildPages(rootFile.ID)
+
+		fileMetadata, err = mark.ListFiles(targetFile, modifiedSince)
+		if err != nil {
+			log.Fatal(err)
+			os.Exit(1)
+		}
+
+		err = mark.PairPages(existingPages, fileMetadata)
+	} else {
+		//Importing a single file
+		fileMetadata = []*mark.Meta{
+			&mark.Meta{
+				//TODO build it in a backwards compatible way
+			},
+		}
 	}
 
 	for _, meta := range fileMetadata {
@@ -208,8 +225,8 @@ func main() {
 			meta.Title = strings.TrimSuffix(filepath.Base(meta.FilePath), filepath.Ext(meta.FilePath))
 		}
 
-		if meta.Space == "" && rootFile != nil {
-			meta.Space = rootFile.Space.Key
+		if meta.Space == "" {
+			meta.Space = spaceKey
 		}
 
 		err = meta.UpdateAttachmentsFromBody(markdown)
@@ -278,26 +295,9 @@ func main() {
 			os.Exit(0)
 		}
 
-		if creds.PageID != "" && meta != nil {
-			log.Warning(
-				`specified file contains metadata, ` +
-					`but it will be ignored due specified command line URL`,
-			)
-
-			meta = nil
-		}
-
-		if creds.PageID == "" && meta == nil {
-			log.Fatal(
-				`specified file doesn't contain metadata ` +
-					`and URL is not specified via command line ` +
-					`or doesn't contain pageId GET-parameter`,
-			)
-		}
-
 		var target *confluence.PageInfo
 
-		if meta != nil {
+		if meta.PageID != "" {
 			parent, page, err := mark.ResolvePage(dryRun, api, meta)
 			if err != nil {
 				log.Fatalf(
@@ -316,12 +316,9 @@ func main() {
 					)
 				}
 			}
-
+			meta.PageID = page.ID
 			target = page
 		} else {
-			if creds.PageID == "" {
-				log.Fatalf(nil, "URL should provide 'pageId' GET-parameter")
-			}
 
 			page, err := api.GetPageByID(creds.PageID)
 			if err != nil {

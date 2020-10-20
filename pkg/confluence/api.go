@@ -9,6 +9,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/bndr/gopencils"
@@ -47,6 +48,17 @@ type PageInfo struct {
 	Links struct {
 		Full string `json:"webui"`
 	} `json:"_links"`
+
+	Metadata struct {
+		Properties struct {
+			MarkSource struct {
+				Value   string `json:"value"`
+				Version struct {
+					Number int `json:"number"`
+				} `json:"version"`
+			} `json:"markSource"`
+		} `json:"properties"`
+	} `json:"metadata"`
 }
 
 type AttachmentInfo struct {
@@ -138,6 +150,39 @@ func (api *API) FindPage(space string, title string) (*PageInfo, error) {
 	}
 
 	return &result.Results[0], nil
+}
+
+func (api *API) ListChildPages(parentPageID string) ([]*PageInfo, error) {
+	allResults := []*PageInfo{}
+	batchSize := 1000
+
+	result := struct {
+		Results   []*PageInfo `json:"results"`
+		TotalSize int         `json:"totalSize"`
+	}{}
+
+	payload := map[string]string{
+		"expand": "ancestors,version,metadata.properties.mark_source",
+		"cql":    fmt.Sprintf("type = page and ancestor = %v", parentPageID),
+		"limit":  strconv.Itoa(batchSize),
+	}
+
+	request, err := api.rest.Res(
+		"search/", &result,
+	).Get(payload)
+	if err != nil {
+		return nil, err
+	}
+
+	if request.Raw.StatusCode != 200 {
+		return nil, newErrorStatusNotOK(request)
+	}
+	allResults = append(allResults, result.Results...)
+	if result.TotalSize >= batchSize {
+		//TODO implement paging with the cursor
+		return nil, fmt.Errorf("importing to locations with more than %v child pages not supported", batchSize)
+	}
+	return allResults, nil
 }
 
 func (api *API) CreateAttachment(
