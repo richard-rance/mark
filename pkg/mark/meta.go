@@ -22,11 +22,11 @@ const (
 type Meta struct {
 	RelativePath   string
 	FileSystemPath string
-	Space       string
-	Title       string
-	Layout      string
-	Attachments map[string]string
-	PageID      string
+	Space          string
+	Title          string
+	Layout         string
+	Attachments    map[string]string
+	PageID         string
 	Parent         *Meta
 	Children       []*Meta
 }
@@ -35,7 +35,7 @@ var (
 	reHeaderPatternV1     = regexp.MustCompile(`\[\]:\s*#\s*\(([^:]+):\s*(.*)\)`)
 	reHeaderPatternV2     = regexp.MustCompile(`<!--\s*([^:]+):\s*(.*)\s*-->`)
 	titlePattern          = regexp.MustCompile(`^#\s(.*)$`)
-	fileAttachmentPattern = regexp.MustCompile(`!\[([^\[\]]+)\]\(([^\s\)]+)(\s+\"[^\"]+\")?\)`)
+	fileAttachmentPattern = regexp.MustCompile(`!\[([^\[\]]+)\]\(([^\s:\)]+)(\s+\"[^\"]+\")?\)`)
 )
 
 func NewMeta(basePath, filePath string, parent *Meta) *Meta {
@@ -44,6 +44,7 @@ func NewMeta(basePath, filePath string, parent *Meta) *Meta {
 		FileSystemPath: filePath,
 		Parent:         parent,
 		Children:       make([]*Meta, 0),
+		Attachments:    map[string]string{},
 	}
 
 	return meta
@@ -125,7 +126,7 @@ func (m *Meta) UpdateTitleFromPath() {
 	file = strings.ReplaceAll(file, "_", " ")
 	file = strings.Trim(file, " "+string(os.PathSeparator))
 	ext := filepath.Ext(file)
-	m.Title = strings.TrimSuffix(file, ext)
+	m.Title = strings.Title(strings.TrimSuffix(file, ext))
 }
 
 func (m *Meta) UpdateTitleFromBody(data []byte, limit int) error {
@@ -176,12 +177,6 @@ func (m *Meta) Validate() error {
 		return fmt.Errorf("file path is not set")
 	}
 
-	if m.Space == "" {
-		return fmt.Errorf("target space is not set (%s header or option is not set)",
-			HeaderSpace,
-		)
-	}
-
 	if m.Title == "" {
 		return fmt.Errorf(
 			"page title is not set (%s header is not set or could not be inferred)",
@@ -190,4 +185,67 @@ func (m *Meta) Validate() error {
 	}
 
 	return nil
+}
+
+func (m *Meta) ChildByTitle(title string) *Meta {
+	if m == nil {
+		return nil
+	}
+	for _, c := range m.Children {
+		if c.Title == title {
+			return c
+		}
+	}
+	return nil
+}
+
+func (m *Meta) Walk(walker func(m *Meta) error) error {
+	err := walker(m)
+	if err != nil {
+		return err
+	}
+	for _, c := range m.Children {
+		err := c.Walk(walker)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *Meta) WalkChildren(walker func(m *Meta) error) error {
+	for _, c := range m.Children {
+		err := c.Walk(walker)
+		if err != nil {
+			return err
+		}
+	}
+	if len(m.Children) == 0 {
+		err := walker(m)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *Meta) RemoveEmpty() bool {
+	newChildren := make([]*Meta, 0, len(m.Children))
+	for _, c := range m.Children {
+		hasChildren := c.RemoveEmpty()
+		if hasChildren {
+			newChildren = append(newChildren, c)
+		}
+	}
+
+	if filepath.Ext(m.RelativePath) == ".md" {
+		return true
+	}
+
+	if len(newChildren) == 0 {
+		return false
+	}
+	m.Children = newChildren
+	return true
+
 }

@@ -1,56 +1,38 @@
 package mark
 
 import (
-	"fmt"
-	"os"
+	"io/ioutil"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/kovetskiy/mark/pkg/log"
 )
 
-func ListFiles(path string, modifiedLast time.Duration) ([]*Meta, error) {
-	file, err := os.Open(path)
-	defer file.Close()
+func RecurseDir(basePath string, root *Meta) (*Meta, error) {
+	err := recurseDir(basePath, basePath, root)
+	return root, err
+}
+
+func recurseDir(basePath, path string, parent *Meta) error {
+	files, err := ioutil.ReadDir(path)
 	if err != nil {
-		return nil, fmt.Errorf("error opening file %s", err)
+		log.Fatal(err)
 	}
-
-	files := make([]*Meta, 0, 1)
-
-	stat, err := file.Stat()
-	if err != nil {
-		return nil, fmt.Errorf("error reading file meta %s", err)
-	}
-	if stat.IsDir() {
-		var now = time.Now()
-		err := filepath.Walk(path,
-			func(filePath string, info os.FileInfo, err error) error {
-				if err != nil {
-					return err
-				}
-
-				if strings.HasSuffix(filePath, ".md") {
-
-					// Only include this file if it was modified m.Since minutes ago
-					if modifiedLast != 0 {
-						if info.ModTime().Unix() < now.Add(-1*modifiedLast).Unix() {
-							log.Debug("skipping %s: last modified %s\n", info.Name(), info.ModTime())
-							return nil
-						}
-					}
-
-					files = append(files, NewMeta(path, filePath))
-				}
-				return nil
-			})
-		if err != nil {
-			return nil, fmt.Errorf("unable to walk path: %s", path)
+	for _, f := range files {
+		if f.IsDir() {
+			self := NewMeta(basePath, filepath.Join(path, f.Name()), parent)
+			self.UpdateTitleFromPath()
+			match := parent.ChildByTitle(self.Title)
+			if match != nil {
+				self = match
+			} else {
+				parent.Children = append(parent.Children, self)
+			}
+			recurseDir(basePath, filepath.Join(path, f.Name()), self)
+		} else if strings.HasSuffix(f.Name(), ".md") {
+			page := NewMeta(basePath, filepath.Join(path, f.Name()), parent)
+			parent.Children = append(parent.Children, page)
 		}
-	} else {
-		files = append(files, NewMeta(path))
 	}
-
-	return files, nil
+	return nil
 }

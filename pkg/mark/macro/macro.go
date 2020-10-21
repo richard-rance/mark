@@ -33,15 +33,14 @@ type Macro struct {
 
 func (macro *Macro) Apply(
 	content []byte,
-) ([]byte, error) {
-	var err error
+) []byte {
 
 	content = macro.Regexp.ReplaceAllFunc(
 		content,
 		func(match []byte) []byte {
 			config := map[string]interface{}{}
 
-			err = yaml.Unmarshal([]byte(macro.Config), &config)
+			err := yaml.Unmarshal([]byte(macro.Config), &config)
 			if err != nil {
 				err = karma.Format(
 					err,
@@ -60,13 +59,16 @@ func (macro *Macro) Apply(
 					err,
 					"unable to execute macros template",
 				)
+				log.Error(err)
+				//Keep the original string if there is an error
+				return match
 			}
 
 			return buffer.Bytes()
 		},
 	)
 
-	return content, err
+	return content
 }
 
 func (macro *Macro) configure(node interface{}, groups [][]byte) interface{} {

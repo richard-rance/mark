@@ -52,7 +52,9 @@ type PageInfo struct {
 	Metadata struct {
 		Properties struct {
 			MarkSource struct {
-				Value   string `json:"value"`
+				Value struct {
+					Path string `json:"path"`
+				} `json:"value"`
 				Version struct {
 					Number int `json:"number"`
 				} `json:"version"`
@@ -157,12 +159,14 @@ func (api *API) ListChildPages(parentPageID string) ([]*PageInfo, error) {
 	batchSize := 1000
 
 	result := struct {
-		Results   []*PageInfo `json:"results"`
-		TotalSize int         `json:"totalSize"`
+		SearchResults []*struct {
+			Page *PageInfo `json:"content"`
+		} `json:"results"`
+		TotalSize int `json:"totalSize"`
 	}{}
 
 	payload := map[string]string{
-		"expand": "ancestors,version,metadata.properties.mark_source",
+		"expand": "content.ancestors,content.version,content.metadata.properties.markSource",
 		"cql":    fmt.Sprintf("type = page and ancestor = %v", parentPageID),
 		"limit":  strconv.Itoa(batchSize),
 	}
@@ -177,7 +181,10 @@ func (api *API) ListChildPages(parentPageID string) ([]*PageInfo, error) {
 	if request.Raw.StatusCode != 200 {
 		return nil, newErrorStatusNotOK(request)
 	}
-	allResults = append(allResults, result.Results...)
+
+	for _, p := range result.SearchResults {
+		allResults = append(allResults, p.Page)
+	}
 	if result.TotalSize >= batchSize {
 		//TODO implement paging with the cursor
 		return nil, fmt.Errorf("importing to locations with more than %v child pages not supported", batchSize)
@@ -418,9 +425,10 @@ func (api *API) GetPageByID(pageID string) (*PageInfo, error) {
 
 func (api *API) CreatePage(
 	space string,
-	parent *PageInfo,
+	parentID string,
 	title string,
 	body string,
+	path string,
 ) (*PageInfo, error) {
 	payload := map[string]interface{}{
 		"type":  "page",
@@ -439,13 +447,18 @@ func (api *API) CreatePage(
 				"editor": map[string]interface{}{
 					"value": "v2",
 				},
+				"markSource": map[string]interface{}{
+					"value": map[string]interface{}{
+						"path": path,
+					},
+				},
 			},
 		},
 	}
 
-	if parent != nil {
+	if parentID != "" {
 		payload["ancestors"] = []map[string]interface{}{
-			{"id": parent.ID},
+			{"id": parentID},
 		}
 	}
 

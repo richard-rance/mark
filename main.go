@@ -6,9 +6,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strconv"
-	"strings"
-	"time"
 
 	"github.com/docopt/docopt-go"
 	"github.com/kovetskiy/mark/pkg/confluence"
@@ -17,7 +14,6 @@ import (
 	"github.com/kovetskiy/mark/pkg/mark/includes"
 	"github.com/kovetskiy/mark/pkg/mark/macro"
 	"github.com/kovetskiy/mark/pkg/mark/stdlib"
-	"github.com/reconquest/karma-go"
 )
 
 const (
@@ -126,7 +122,6 @@ Options:
   -f <file>             Use specified markdown file for converting to html.
   -k                    Lock page editing to current user only to prevent accidental
                          manual edits over Confluence Web UI.
-  -s --since <minutes>  When file is a directory only process files modified in the last x minutes
   --dry-run             Resolve page and ancestry, show resulting HTML and exit.
   --compile-only        Show resulting HTML and don't update Confluence page content.
   --debug               Enable debug logs.
@@ -144,16 +139,10 @@ func main() {
 
 	var (
 		targetFile, _ = args["-f"].(string)
-		compileOnly   = args["--compile-only"].(bool)
-		dryRun        = args["--dry-run"].(bool)
-		editLock      = args["-k"].(bool)
+		//compileOnly   = args["--compile-only"].(bool)
+		//dryRun        = args["--dry-run"].(bool)
+		editLock = args["-k"].(bool)
 	)
-	since, err := argInt(args, "--since")
-	if err != nil {
-		log.Fatal(err)
-		os.Exit(1)
-	}
-	modifiedSince := time.Duration(since) * time.Minute
 
 	log.Init(args["--debug"].(bool), args["--trace"].(bool))
 
@@ -170,81 +159,97 @@ func main() {
 	}
 
 	api := confluence.NewAPI(creds.BaseURL, creds.Username, creds.Password)
-
-	spaceKey := ""
-	var fileMetadata []*mark.Meta
-	if creds.RootPageID != "" {
-		// Importing a directory
-		rootFile, err := api.GetPageByID(creds.RootPageID)
-		if err != nil {
-			log.Fatal(err)
-			os.Exit(1)
-		}
-		spaceKey = rootFile.Space.Key
-
-		existingPages, err := api.ListChildPages(rootFile.ID)
-
-		fileMetadata, err = mark.ListFiles(targetFile, modifiedSince)
-		if err != nil {
-			log.Fatal(err)
-			os.Exit(1)
-		}
-
-		err = mark.PairPages(existingPages, fileMetadata)
-	} else {
-		//Importing a single file
-		fileMetadata = []*mark.Meta{
-			&mark.Meta{
-				//TODO build it in a backwards compatible way
-			},
-		}
+	stdlib, err := stdlib.New(api)
+	if err != nil {
+		log.Fatal(err)
+		os.Exit(1)
 	}
 
-	for _, meta := range fileMetadata {
+	rootFile, err := api.GetPageByID(creds.RootPageID)
+	if err != nil {
+		log.Fatal(err)
+		os.Exit(1)
+	}
+	spaceKey := rootFile.Space.Key
 
-		markdown, err := ioutil.ReadFile(meta.FilePath)
+	existingPages, err := api.ListChildPages(rootFile.ID)
+
+	root := mark.NewMeta(targetFile, targetFile, nil)
+	root.Title = rootFile.Title
+	if root.Title == "" {
+		root.UpdateTitleFromPath()
+	}
+	root.PageID = rootFile.ID
+
+	pages, err := mark.RecurseDir(targetFile, root)
+	if err != nil {
+		log.Fatal(err)
+		os.Exit(1)
+	}
+
+	pages.RemoveEmpty()
+
+	pages.Walk(func(m *mark.Meta) error {
+		for _, ep := range existingPages {
+			if ep.Metadata.Properties.MarkSource.Value.Path == m.RelativePath {
+				m.PageID = ep.ID
+				return nil
+			}
+		}
+		return nil
+	})
+
+	err = pages.Walk(func(meta *mark.Meta) error {
+		log.Info("Processing ", meta.RelativePath)
+		f, err := os.Open(meta.FileSystemPath)
 		if err != nil {
-			log.Fatal(err)
-			os.Exit(1)
+			return err
+		}
+		defer f.Close()
+		info, err := f.Stat()
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			if meta.PageID == "" {
+				_, err := mark.CreateEmptyPage(api, spaceKey, meta)
+				if err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+
+		markdown, err := ioutil.ReadFile(meta.FileSystemPath)
+		if err != nil {
+			return err
 		}
 
 		markdown, err = meta.UpdateFromHeader(markdown)
 		if err != nil {
-			log.Fatal(err)
-			os.Exit(1)
+			return err
 		}
 
 		if meta.Title == "" {
 			err = meta.UpdateTitleFromBody(markdown, 10)
 			if err != nil {
-				log.Fatal(err)
+				return err
 			}
 		}
 
 		if meta.Title == "" {
-			meta.Title = strings.TrimSuffix(filepath.Base(meta.FilePath), filepath.Ext(meta.FilePath))
-		}
-
-		if meta.Space == "" {
-			meta.Space = spaceKey
+			meta.UpdateTitleFromPath()
 		}
 
 		err = meta.UpdateAttachmentsFromBody(markdown)
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 
 		err = meta.Validate()
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
-
-		stdlib, err := stdlib.New(api)
-		if err != nil {
-			log.Fatal(err)
-			os.Exit(1)
-		}
-
 		templates := stdlib.Templates
 
 		var recurse bool
@@ -255,8 +260,7 @@ func main() {
 				templates,
 			)
 			if err != nil {
-				log.Fatal(err)
-				os.Exit(1)
+				return err
 			}
 
 			if !recurse {
@@ -266,76 +270,43 @@ func main() {
 
 		macros, markdown, err := macro.ExtractMacros(markdown, templates)
 		if err != nil {
-			log.Fatal(err)
-			os.Exit(1)
+			return err
 		}
 
 		macros = append(macros, stdlib.Macros...)
 
 		for _, macro := range macros {
-			markdown, err = macro.Apply(markdown)
-			if err != nil {
-				log.Fatal(err)
-				os.Exit(1)
-			}
+			markdown = macro.Apply(markdown)
 		}
-
-		if dryRun {
-			compileOnly = true
-
-			_, _, err := mark.ResolvePage(dryRun, api, meta)
-			if err != nil {
-				log.Fatalf(err, "unable to resolve page location")
-				os.Exit(1)
-			}
-		}
-
-		if compileOnly {
-			fmt.Println(mark.CompileMarkdown(markdown, stdlib))
-			os.Exit(0)
-		}
-
 		var target *confluence.PageInfo
 
-		if meta.PageID != "" {
-			parent, page, err := mark.ResolvePage(dryRun, api, meta)
+		if meta.PageID == "" {
+			page, err := mark.CreateEmptyPage(api, spaceKey, meta)
 			if err != nil {
-				log.Fatalf(
-					karma.Describe("title", meta.Title).Reason(err),
-					"unable to resolve page",
-				)
+				return err
 			}
-
-			if page == nil {
-				page, err = api.CreatePage(meta.Space, parent, meta.Title, ``)
-				if err != nil {
-					log.Fatalf(
-						err,
-						"can't create page %q",
-						meta.Title,
-					)
-				}
-			}
-			meta.PageID = page.ID
 			target = page
+
 		} else {
 
-			page, err := api.GetPageByID(creds.PageID)
+			page, err := api.GetPageByID(meta.PageID)
 			if err != nil {
-				log.Fatalf(err, "unable to retrieve page by id")
+				return fmt.Errorf("unable to retrieve page by id %v", err)
 			}
 
 			target = page
 		}
 
-		fileDir := filepath.Dir(meta.FilePath)
+		fileDir := filepath.Dir(meta.FileSystemPath)
 
 		attaches, err := mark.ResolveAttachments(api, target, fileDir, meta.Attachments)
 		if err != nil {
-			log.Fatalf(err, "unable to create/update attachments")
+			return fmt.Errorf("unable to create/update attachments %v", err)
 		}
 
 		markdown = mark.CompileAttachmentLinks(markdown, attaches)
+
+		//TODO Compile page links
 
 		html := mark.CompileMarkdown(markdown, stdlib)
 
@@ -354,7 +325,7 @@ func main() {
 				},
 			)
 			if err != nil {
-				log.Fatal(err)
+				return err
 			}
 
 			html = buffer.String()
@@ -362,7 +333,7 @@ func main() {
 
 		err = api.UpdatePage(target, html)
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 
 		if editLock {
@@ -378,7 +349,7 @@ func main() {
 				creds.Username,
 			)
 			if err != nil {
-				log.Fatal(err)
+				return err
 			}
 		}
 
@@ -391,17 +362,12 @@ func main() {
 		fmt.Println(
 			creds.BaseURL + target.Links.Full,
 		)
-	}
-}
+		return nil
 
-func argInt(args map[string]interface{}, key string) (int, error) {
-	arg, ok := args[key].(string)
-	if !ok {
-		return 0, nil
-	}
-	v, err := strconv.Atoi(arg)
+	})
 	if err != nil {
-		return 0, fmt.Errorf("%v is not a valid int: %w", key, err)
+		log.Fatal(err)
+		os.Exit(1)
 	}
-	return v, nil
+
 }
