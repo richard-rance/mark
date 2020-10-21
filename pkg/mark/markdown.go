@@ -51,6 +51,12 @@ func CompileMarkdown(
 		[]byte(`<$1`+colon.String()+`$2>`),
 	)
 
+	fakeHTML := regexp.MustCompile(`<(\/?\s?[a-zA-Z]+\s?)>`)
+	markdown = fakeHTML.ReplaceAll(
+		markdown,
+		[]byte(`&lt;$1&gt;`),
+	)
+
 	renderer := ConfluenceRenderer{
 		Renderer: blackfriday.HtmlRenderer(
 			blackfriday.HTML_USE_XHTML|

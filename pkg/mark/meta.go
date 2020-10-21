@@ -64,8 +64,6 @@ func (m *Meta) UpdateFromHeader(data []byte) ([]byte, error) {
 			return nil, err
 		}
 
-		offset += len(line) + 1
-
 		matches := reHeaderPatternV2.FindStringSubmatch(line)
 		if matches == nil {
 			matches = reHeaderPatternV1.FindStringSubmatch(line)
@@ -80,6 +78,7 @@ func (m *Meta) UpdateFromHeader(data []byte) ([]byte, error) {
 				matches[2],
 			)
 		}
+		offset += len(line) + 1
 
 		m.Attachments = make(map[string]string)
 
@@ -119,14 +118,14 @@ func (m *Meta) UpdateFromHeader(data []byte) ([]byte, error) {
 }
 
 func (m *Meta) UpdateTitleFromPath() {
-	path, file := filepath.Split(m.RelativePath)
-	path = strings.TrimRight(path, string(os.PathSeparator))
+	_, file := filepath.Split(m.RelativePath)
+	ext := filepath.Ext(file)
+	file = strings.TrimSuffix(file, ext)
 	file = strings.ReplaceAll(file, ".", " ")
 	file = strings.ReplaceAll(file, "-", " ")
 	file = strings.ReplaceAll(file, "_", " ")
 	file = strings.Trim(file, " "+string(os.PathSeparator))
-	ext := filepath.Ext(file)
-	m.Title = strings.Title(strings.TrimSuffix(file, ext))
+	m.Title = strings.Title(file)
 }
 
 func (m *Meta) UpdateTitleFromBody(data []byte, limit int) error {

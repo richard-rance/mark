@@ -48,10 +48,11 @@ func ResolveAttachments(
 
 		checksum, err := getChecksum(attach.Path)
 		if err != nil {
-			return nil, karma.Format(
+			log.Warningf(
 				err,
 				"unable to get checksum for attachment: %q", attach.Name,
 			)
+			continue
 		}
 
 		attach.Checksum = checksum
