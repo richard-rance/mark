@@ -181,15 +181,16 @@ func main() {
 	}
 	root.PageID = rootFile.ID
 
-	pages, err := mark.RecurseDir(targetFile, root)
+	rootPage, err := mark.RecurseDir(targetFile, root)
 	if err != nil {
 		log.Fatal(err)
 		os.Exit(1)
 	}
 
-	pages.RemoveEmpty()
+	rootPage.RemoveEmpty()
 
-	pages.Walk(func(m *mark.Meta) error {
+	rootPage.Walk(func(m *mark.Meta) error {
+		m.Space = spaceKey
 		for _, ep := range existingPages {
 			if ep.Metadata.Properties.MarkSource.Value.Path == m.RelativePath {
 				m.PageID = ep.ID
@@ -199,7 +200,7 @@ func main() {
 		return nil
 	})
 
-	err = pages.Walk(func(meta *mark.Meta) error {
+	err = rootPage.Walk(func(meta *mark.Meta) error {
 		log.Info("Processing ", meta.RelativePath)
 		f, err := os.Open(meta.FileSystemPath)
 		if err != nil {
@@ -305,6 +306,11 @@ func main() {
 		}
 
 		markdown = mark.CompileAttachmentLinks(markdown, attaches)
+
+		markdown, err = mark.CompilePageLinks(markdown, meta, creds.BaseURL, rootPage)
+		if err != nil {
+			return err
+		}
 
 		//TODO Compile page links
 
