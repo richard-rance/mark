@@ -51,7 +51,7 @@ func CompileMarkdown(
 		[]byte(`<$1`+colon.String()+`$2>`),
 	)
 
-	fakeHTML := regexp.MustCompile(`<(\/?\s?[a-zA-Z]+\s?)>`)
+	fakeHTML := regexp.MustCompile(`<(\/?\s?[^:>]+\s?)>`)
 	markdown = fakeHTML.ReplaceAll(
 		markdown,
 		[]byte(`&lt;$1&gt;`),

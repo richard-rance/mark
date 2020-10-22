@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/bndr/gopencils"
+	"github.com/kovetskiy/mark/pkg/log"
 	"github.com/reconquest/karma-go"
 )
 
@@ -555,6 +556,14 @@ func (api *API) UpdatePage(
 	}
 
 	if request.Raw.StatusCode != 200 {
+		body, _ := ioutil.ReadAll(request.Raw.Body)
+		if strings.Contains(string(body), "Content body cannot be converted to new editor format") {
+			err := ioutil.WriteFile("parsedPage.html", []byte(newContent), 0644)
+			if err != nil {
+				log.Errorf(err, "Could not write file parsedPage.html")
+			}
+			log.Error("Transformed file written to parsedPage.html")
+		}
 		return newErrorStatusNotOK(request)
 	}
 
