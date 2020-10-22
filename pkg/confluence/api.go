@@ -130,7 +130,7 @@ func (api *API) FindChildPage(space string, title string, parentPageID string) (
 	}{}
 
 	payload := map[string]string{
-		"expand": "content.ancestors,content.version,content.metadata.properties.markSource",
+		"expand": "content.ancestors,content.version,content.space,content.metadata.properties.markSource",
 		"cql":    fmt.Sprintf(`type = page and ancestor = %v and title = "%v"`, parentPageID, title),
 		"limit":  strconv.Itoa(2),
 	}
@@ -164,7 +164,7 @@ func (api *API) FindPage(space string, title string) (*PageInfo, error) {
 
 	payload := map[string]string{
 		"spaceKey": space,
-		"expand":   "ancestors,version",
+		"expand":   "ancestors,version,space,metadata.properties.markSource",
 	}
 
 	if title != "" {
@@ -203,7 +203,7 @@ func (api *API) ListChildPages(parentPageID string) ([]*PageInfo, error) {
 	}{}
 
 	payload := map[string]string{
-		"expand": "content.ancestors,content.version,content.metadata.properties.markSource",
+		"expand": "content.ancestors,content.version,content.space,content.metadata.properties.markSource",
 		"cql":    fmt.Sprintf("type = page and ancestor = %v", parentPageID),
 		"limit":  strconv.Itoa(batchSize),
 	}
@@ -448,7 +448,7 @@ func (api *API) GetAttachments(pageID string) ([]AttachmentInfo, error) {
 func (api *API) GetPageByID(pageID string) (*PageInfo, error) {
 	request, err := api.rest.Res(
 		"content/"+pageID, &PageInfo{},
-	).Get(map[string]string{"expand": "ancestors,version,space"})
+	).Get(map[string]string{"expand": "ancestors,version,space,metadata.properties.markSource"})
 	if err != nil {
 		return nil, err
 	}
