@@ -10,7 +10,7 @@ var (
 	log *cog.Logger
 )
 
-func Init(debug, trace bool) {
+func Init(debug, trace, warnOnly bool) {
 	stderr := lorg.NewLog()
 	stderr.SetIndentLines(true)
 	stderr.SetFormat(
@@ -18,6 +18,10 @@ func Init(debug, trace bool) {
 	)
 
 	log = cog.NewLogger(stderr)
+
+	if warnOnly {
+		log.SetLevel(lorg.LevelWarning)
+	}
 
 	if debug {
 		log.SetLevel(lorg.LevelDebug)

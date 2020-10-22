@@ -124,6 +124,7 @@ Options:
                          manual edits over Confluence Web UI.
   --dry-run             Resolve page and ancestry, show resulting HTML and exit.
   --compile-only        Show resulting HTML and don't update Confluence page content.
+  --warn-only           Only show logs at a warning level or above
   --debug               Enable debug logs.
   --trace               Enable trace logs.
   -h --help             Show this screen and call 911.
@@ -144,7 +145,7 @@ func main() {
 		editLock = args["-k"].(bool)
 	)
 
-	log.Init(args["--debug"].(bool), args["--trace"].(bool))
+	log.Init(args["--debug"].(bool), args["--trace"].(bool), args["--warn-only"].(bool))
 
 	config, err := LoadConfig(filepath.Join(os.Getenv("HOME"), ".config/mark"))
 	if err != nil {
