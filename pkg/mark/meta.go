@@ -22,6 +22,7 @@ const (
 type Meta struct {
 	RelativePath   string
 	FileSystemPath string
+	Directory      bool
 	Space          string
 	Title          string
 	Layout         string
@@ -40,12 +41,16 @@ var (
 
 func NewMeta(basePath, filePath string, parent *Meta) *Meta {
 	meta := &Meta{
-		RelativePath:   strings.TrimPrefix(filePath, basePath),
 		FileSystemPath: filePath,
 		Parent:         parent,
 		Children:       make([]*Meta, 0),
 		Attachments:    map[string]string{},
 	}
+	rel, err := filepath.Rel(basePath, filePath)
+	if err != nil {
+		panic(err)
+	}
+	meta.RelativePath = rel
 
 	return meta
 }
@@ -231,20 +236,12 @@ func (m *Meta) WalkChildren(walker func(m *Meta) error) error {
 func (m *Meta) RemoveEmpty() bool {
 	newChildren := make([]*Meta, 0, len(m.Children))
 	for _, c := range m.Children {
-		hasChildren := c.RemoveEmpty()
-		if hasChildren {
+		hasContent := c.RemoveEmpty()
+		if hasContent {
 			newChildren = append(newChildren, c)
 		}
 	}
-
-	if filepath.Ext(m.RelativePath) == ".md" {
-		return true
-	}
-
-	if len(newChildren) == 0 {
-		return false
-	}
 	m.Children = newChildren
-	return true
 
+	return !m.Directory || len(m.Children) > 0
 }

@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/kovetskiy/mark/pkg/confluence"
 	"github.com/kovetskiy/mark/pkg/log"
@@ -41,21 +42,31 @@ func CreateEmptyPage(
 
 func CompilePageLinks(markdown []byte, meta *Meta, baseURL string, root *Meta) ([]byte, error) {
 
-	linkPattern := regexp.MustCompile(`([^!]\[[^\[\]]+\])\(([^\s:\)]+)(\s+\"[^\"]+\")?\)`)
+	linkPattern := regexp.MustCompile(`([^!]\[[^\[\]]+\])\(([^\s:?#\)]+)([#\s][^\)]*)?\)`)
 	markdown = linkPattern.ReplaceAllFunc(markdown, func(link []byte) []byte {
 		matches := linkPattern.FindSubmatch(link)
 		if len(matches) >= 3 {
+			linkText := string(matches[1])
 			path := string(matches[2])
-			fullPath := filepath.Join(filepath.Dir(meta.RelativePath), string(matches[2]))
+			hashAndTitle := string(matches[3])
+
+			currentDir := meta.RelativePath
+			if filepath.Ext(currentDir) != "" {
+				currentDir = filepath.Dir(currentDir)
+			}
+			fullLinkPath := filepath.Join(currentDir, path)
+
 			var linkedMeta *Meta
 			root.Walk(func(m *Meta) error {
-				if m.RelativePath == fullPath {
+				if strings.EqualFold(m.RelativePath, fullLinkPath) ||
+					strings.EqualFold(filepath.Join(m.RelativePath, "readme.md"), fullLinkPath) {
 					linkedMeta = m
 				}
 				return nil
 			})
 			if linkedMeta == nil {
-				log.Error(fmt.Sprintf("Link to parent page that is not being loaded: %v -> %v", meta.RelativePath, path))
+				//TODO Should we add a config option to link directly to the non-markdown file in github/bitbucket?
+				log.Error(fmt.Sprintf("Link to page that is not being loaded in: %v to: %v", meta.RelativePath, path))
 				return link
 			}
 			if linkedMeta.PageID == "" {
@@ -65,8 +76,8 @@ func CompilePageLinks(markdown []byte, meta *Meta, baseURL string, root *Meta) (
 			}
 
 			href := fmt.Sprintf("%v/spaces/%v/pages/%v/%v", baseURL, linkedMeta.Space, linkedMeta.PageID, linkedMeta.Title)
-			log.Info(fmt.Sprintf("Link successfully replaced in: %v from:%v to: %v", meta.RelativePath, path, href))
-			link = []byte(fmt.Sprintf("%v(%v)", string(matches[1]), href))
+			log.Debug(fmt.Sprintf("Link successfully replaced in: %v from:%v to: %v", meta.RelativePath, path, href))
+			link = []byte(fmt.Sprintf("%v(%v%v)", linkText, href, hashAndTitle))
 
 		}
 

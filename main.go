@@ -174,14 +174,7 @@ func main() {
 
 	existingPages, err := api.ListChildPages(rootFile.ID)
 
-	root := mark.NewMeta(targetFile, targetFile, nil)
-	root.Title = rootFile.Title
-	if root.Title == "" {
-		root.UpdateTitleFromPath()
-	}
-	root.PageID = rootFile.ID
-
-	rootPage, err := mark.RecurseDir(targetFile, root)
+	rootPage, err := mark.NewMetaTree(targetFile, rootFile.Title, rootFile.ID)
 	if err != nil {
 		log.Fatal(err)
 		os.Exit(1)
@@ -202,16 +195,7 @@ func main() {
 
 	err = rootPage.Walk(func(meta *mark.Meta) error {
 		log.Info("Processing ", meta.RelativePath)
-		f, err := os.Open(meta.FileSystemPath)
-		if err != nil {
-			return err
-		}
-		defer f.Close()
-		info, err := f.Stat()
-		if err != nil {
-			return err
-		}
-		if info.IsDir() {
+		if meta.Directory {
 			if meta.PageID == "" {
 				_, err := mark.CreateEmptyPage(api, spaceKey, meta)
 				if err != nil {
@@ -312,8 +296,6 @@ func main() {
 			return err
 		}
 
-		//TODO Compile page links
-
 		html := mark.CompileMarkdown(markdown, stdlib)
 
 		{
@@ -365,9 +347,6 @@ func main() {
 			creds.BaseURL+target.Links.Full,
 		)
 
-		fmt.Println(
-			creds.BaseURL + target.Links.Full,
-		)
 		return nil
 
 	})
