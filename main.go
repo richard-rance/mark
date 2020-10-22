@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/docopt/docopt-go"
 	"github.com/kovetskiy/mark/pkg/confluence"
@@ -105,6 +106,8 @@ By default, mark provides several built-in templates and macros:
 
 Usage:
   mark [options] [-u <username>] [-p <token>] [-k] [-l <url>] -f <file>
+  mark [options] [-u <username>] [-p <token>] [-k] -r <url> -f <file>
+  mark [options] [-u <username>] [-p <token>] [-k] -d <path> -f <file>
   mark [options] [-u <username>] [-p <password>] [-k] [-b <url>] -f <file>
   mark [options] [-u <username>] [-p <password>] [-k] [-n] -c <file>
   mark -v | --version
@@ -114,6 +117,9 @@ Options:
   -u <username>         Use specified username for updating Confluence page.
   -p <token>            Use specified token for updating Confluence page.
   -r <url>              Specify the base Confluence page to update.
+  -d <path>      		Specify the space key and page title(s) to match with the -f argument
+						 Each should be separated by a /
+						 Missing pages will be created as empty placeholders
   -l <url>              Edit specified Confluence page.
                          If -l is not specified, file should contain metadata (see
                          above).
@@ -142,7 +148,8 @@ func main() {
 		targetFile, _ = args["-f"].(string)
 		//compileOnly   = args["--compile-only"].(bool)
 		//dryRun        = args["--dry-run"].(bool)
-		editLock = args["-k"].(bool)
+		editLock           = args["-k"].(bool)
+		destinationPage, _ = args["-d"].(string)
 	)
 
 	log.Init(args["--debug"].(bool), args["--trace"].(bool), args["--warn-only"].(bool))
@@ -166,11 +173,50 @@ func main() {
 		os.Exit(1)
 	}
 
-	rootFile, err := api.GetPageByID(creds.RootPageID)
-	if err != nil {
-		log.Fatal(err)
+	if creds.RootPageID != "" && destinationPage != "" {
+		log.Fatal("Only one of -r or -d should be specified")
 		os.Exit(1)
 	}
+
+	var rootFile *confluence.PageInfo
+
+	if destinationPage != "" {
+		parts := strings.Split(destinationPage, "/")
+
+		spaceKey := parts[0]
+		rootFile, err = api.FindRootPage(spaceKey)
+		if err != nil {
+			log.Fatal(err)
+			os.Exit(1)
+		}
+		parentPageID := rootFile.ID
+		for _, title := range parts[1:] {
+			rootFile, err = api.FindChildPage(spaceKey, title, parentPageID)
+			if err != nil {
+				log.Fatal(err)
+				os.Exit(1)
+			}
+
+			if rootFile == nil {
+				log.Info(fmt.Sprintf("Creating page '%v' for root directory", title))
+				rootFile, err = api.CreatePage(spaceKey, parentPageID, title, ``, ``)
+				if err != nil {
+					log.Fatal(err)
+					os.Exit(1)
+				}
+			}
+			parentPageID = rootFile.ID
+		}
+	}
+
+	if creds.RootPageID != "" {
+		rootFile, err = api.GetPageByID(creds.RootPageID)
+		if err != nil {
+			log.Fatal(err)
+			os.Exit(1)
+		}
+	}
+
 	spaceKey := rootFile.Space.Key
 
 	existingPages, err := api.ListChildPages(rootFile.ID)

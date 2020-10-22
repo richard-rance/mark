@@ -120,6 +120,43 @@ func (api *API) FindRootPage(space string) (*PageInfo, error) {
 	}, nil
 }
 
+func (api *API) FindChildPage(space string, title string, parentPageID string) (*PageInfo, error) {
+
+	result := struct {
+		SearchResults []*struct {
+			Page *PageInfo `json:"content"`
+		} `json:"results"`
+		TotalSize int `json:"totalSize"`
+	}{}
+
+	payload := map[string]string{
+		"expand": "content.ancestors,content.version,content.metadata.properties.markSource",
+		"cql":    fmt.Sprintf(`type = page and ancestor = %v and title = "%v"`, parentPageID, title),
+		"limit":  strconv.Itoa(2),
+	}
+
+	request, err := api.rest.Res(
+		"search/", &result,
+	).Get(payload)
+	if err != nil {
+		return nil, err
+	}
+
+	if request.Raw.StatusCode != 200 {
+		return nil, newErrorStatusNotOK(request)
+	}
+
+	if result.TotalSize > 1 {
+		return nil, fmt.Errorf("found multiple pages with title '%v' under %v in %v", title, parentPageID, space)
+	}
+
+	if len(result.SearchResults) == 0 {
+		return nil, nil
+	}
+
+	return result.SearchResults[0].Page, nil
+}
+
 func (api *API) FindPage(space string, title string) (*PageInfo, error) {
 	result := struct {
 		Results []PageInfo `json:"results"`
